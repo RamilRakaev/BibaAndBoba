@@ -1,0 +1,45 @@
+﻿@inherits LayoutComponentBase
+@inject ApiAuthenticationStateProvider Auth
+@inject ChatRealtimeService Realtime
+@inject NavigationManager Navigation
+
+<div class="app-shell">
+    <header class="topbar">
+        <div class="brand">Messenger</div>
+        <nav class="topbar-nav">
+            <NavLink href="/chats" class="nav-link">Чаты</NavLink>
+            <NavLink href="/users" class="nav-link">Пользователи</NavLink>
+            <AuthorizeView Roles="Admin">
+                <Authorized>
+                    <NavLink href="/admin/users" class="nav-link">Управление пользователями</NavLink>
+                </Authorized>
+            </AuthorizeView>
+        </nav>
+        <div class="topbar-user">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="user-name">@context.User.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value</span>
+                    <button class="btn btn-ghost" @onclick="LogoutAsync">Выйти</button>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+    </header>
+    <main class="app-main">
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui">
+    Произошла ошибка.
+    <a href="" class="reload">Обновить</a>
+    <a class="dismiss">🗙</a>
+</div>
+
+@code {
+    private async Task LogoutAsync()
+    {
+        await Realtime.StopAsync();
+        await Auth.LogoutAsync();
+        Navigation.NavigateTo("/login", replace: true);
+    }
+}

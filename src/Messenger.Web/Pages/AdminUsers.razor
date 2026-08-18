@@ -1,0 +1,205 @@
+@page "/admin/users"
+@attribute [Authorize(Roles = "Admin")]
+@inject ApiClient Api
+
+<div class="page-card">
+    <div class="page-header">
+        <div>
+            <h1>Управление пользователями</h1>
+            <p class="muted">Создание, редактирование, смена пароля и деактивация</p>
+        </div>
+        <button class="btn btn-primary" @onclick="ToggleCreate">@(showCreate ? "Закрыть" : "Создать пользователя")</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-error">@error</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(info))
+    {
+        <div class="alert alert-ok">@info</div>
+    }
+
+    @if (showCreate)
+    {
+        <div class="panel">
+            <h2>Новый пользователь</h2>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label>UserName</label>
+                    <input @bind="createModel.UserName" />
+                </div>
+                <div class="form-field">
+                    <label>DisplayName</label>
+                    <input @bind="createModel.DisplayName" />
+                </div>
+                <div class="form-field">
+                    <label>Пароль</label>
+                    <input type="password" @bind="createModel.Password" />
+                </div>
+                <div class="form-field">
+                    <label>Роль</label>
+                    <select @bind="createModel.Role">
+                        <option value="User">User</option>
+                        <option value="Admin">Admin</option>
+                    </select>
+                </div>
+            </div>
+            <label class="checkbox">
+                <input type="checkbox" @bind="createModel.IsActive" />
+                Активен
+            </label>
+            <button class="btn btn-primary" @onclick="CreateAsync">Сохранить</button>
+        </div>
+    }
+
+    @if (users is null)
+    {
+        <p>Загрузка...</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>UserName</th>
+                    <th>DisplayName</th>
+                    <th>Роль</th>
+                    <th>Активен</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in users)
+                {
+                    <tr>
+                        <td>
+                            <input value="@user.UserName" @onchange="e => user.UserName = e.Value?.ToString() ?? string.Empty" />
+                        </td>
+                        <td>
+                            <input value="@user.DisplayName" @onchange="e => user.DisplayName = e.Value?.ToString() ?? string.Empty" />
+                        </td>
+                        <td>
+                            <select value="@user.Role" @onchange="e => user.Role = e.Value?.ToString() ?? UserRoleDefault">
+                                <option value="User">User</option>
+                                <option value="Admin">Admin</option>
+                            </select>
+                        </td>
+                        <td>
+                            <input type="checkbox" checked="@user.IsActive" @onchange="e => user.IsActive = (bool)(e.Value ?? false)" />
+                        </td>
+                        <td class="table-actions">
+                            <button class="btn btn-secondary" @onclick="() => SaveAsync(user)">Сохранить</button>
+                            <button class="btn btn-ghost" @onclick="() => TogglePassword(user.Id)">Пароль</button>
+                            <button class="btn btn-danger" @onclick="() => DeactivateAsync(user.Id)">Деактивировать</button>
+                        </td>
+                    </tr>
+                    @if (passwordUserId == user.Id)
+                    {
+                        <tr>
+                            <td colspan="5">
+                                <div class="inline-password">
+                                    <input type="password" placeholder="Новый пароль" @bind="newPassword" />
+                                    <button class="btn btn-primary" @onclick="() => ChangePasswordAsync(user.Id)">Сменить пароль</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private const string UserRoleDefault = "User";
+    private List<UserDto>? users;
+    private readonly CreateUserRequest createModel = new();
+    private bool showCreate;
+    private string? error;
+    private string? info;
+    private Guid? passwordUserId;
+    private string newPassword = string.Empty;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        users = await Api.GetUsersAsync();
+    }
+
+    private void ToggleCreate() => showCreate = !showCreate;
+
+    private void TogglePassword(Guid userId)
+    {
+        passwordUserId = passwordUserId == userId ? null : userId;
+        newPassword = string.Empty;
+    }
+
+    private async Task CreateAsync()
+    {
+        await RunAsync(async () =>
+        {
+            await Api.CreateUserAsync(createModel);
+            createModel.UserName = string.Empty;
+            createModel.DisplayName = string.Empty;
+            createModel.Password = string.Empty;
+            createModel.Role = "User";
+            createModel.IsActive = true;
+            showCreate = false;
+            info = "Пользователь создан.";
+            await LoadAsync();
+        });
+    }
+
+    private async Task SaveAsync(UserDto user)
+    {
+        await RunAsync(async () =>
+        {
+            await Api.UpdateUserAsync(user.Id, new UpdateUserRequest
+            {
+                UserName = user.UserName,
+                DisplayName = user.DisplayName,
+                Role = user.Role,
+                IsActive = user.IsActive
+            });
+            info = "Пользователь сохранён.";
+            await LoadAsync();
+        });
+    }
+
+    private async Task ChangePasswordAsync(Guid userId)
+    {
+        await RunAsync(async () =>
+        {
+            await Api.ChangePasswordAsync(userId, new ChangePasswordRequest { Password = newPassword });
+            passwordUserId = null;
+            newPassword = string.Empty;
+            info = "Пароль изменён.";
+        });
+    }
+
+    private async Task DeactivateAsync(Guid userId)
+    {
+        await RunAsync(async () =>
+        {
+            await Api.DeactivateUserAsync(userId);
+            info = "Пользователь деактивирован.";
+            await LoadAsync();
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        error = null;
+        info = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+}

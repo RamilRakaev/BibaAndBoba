@@ -1,0 +1,225 @@
+@page "/chats/{ChatId:guid}"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@inject ApiClient Api
+@inject ChatRealtimeService Realtime
+@inject IJSRuntime JS
+
+<div class="messenger">
+    <header class="messenger-header">
+        <a class="muted" href="/chats">← Чаты</a>
+        <h1>@(title ?? "Чат")</h1>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-error">@error</div>
+    }
+
+    <div class="messenger-body" id="message-list">
+        @if (messages is null)
+        {
+            <p class="muted">Загрузка...</p>
+        }
+        else if (messages.Count == 0)
+        {
+            <p class="muted">Напишите первое сообщение</p>
+        }
+        else
+        {
+            @foreach (var message in messages)
+            {
+                var own = message.SenderUserId == currentUserId;
+                <div class="bubble-row @(own ? "own" : "other")">
+                    <div class="bubble">
+                        <div class="bubble-author">@message.SenderDisplayName</div>
+                        <div class="bubble-text">
+                            @if (message.IsDeleted)
+                            {
+                                <em>Сообщение удалено</em>
+                            }
+                            else
+                            {
+                                @message.Text
+                            }
+                        </div>
+                        <div class="bubble-time">
+                            @FormatDate(message.CreatedAt)
+                            @if (message.EditedAt is not null && !message.IsDeleted)
+                            {
+                                <span> · изменено</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+        <div id="messages-end"></div>
+    </div>
+
+    <form class="messenger-input" @onsubmit="SendAsync" @onsubmit:preventDefault="true">
+        <input @bind="draft"
+               @bind:event="oninput"
+               maxlength="4000"
+               placeholder="Сообщение"
+               autocomplete="off" />
+        <button class="btn btn-primary" type="submit" disabled="@sending">Отправить</button>
+    </form>
+</div>
+
+@code {
+    [Parameter] public Guid ChatId { get; set; }
+
+    private List<MessageDto>? messages;
+    private Guid currentUserId;
+    private string? title;
+    private string draft = string.Empty;
+    private string? error;
+    private bool sending;
+    private bool subscribed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        error = null;
+        messages = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var me = await Api.GetMeAsync();
+            currentUserId = me?.Id ?? Guid.Empty;
+            var chat = await Api.GetChatAsync(ChatId);
+            title = chat.OtherUser?.DisplayName
+                    ?? string.Join(" — ", chat.Participants.Select(p => p.DisplayName));
+            messages = await Api.GetMessagesAsync(ChatId);
+
+            if (!subscribed)
+            {
+                Realtime.MessageReceived += OnMessageReceived;
+                Realtime.MessageUpdated += OnMessageUpdated;
+                Realtime.MessageDeleted += OnMessageDeleted;
+                subscribed = true;
+            }
+
+            await Realtime.JoinChatAsync(ChatId);
+            await ScrollAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private async Task SendAsync()
+    {
+        if (string.IsNullOrWhiteSpace(draft) || sending)
+        {
+            return;
+        }
+
+        sending = true;
+        error = null;
+        var text = draft.Trim();
+        try
+        {
+            var message = await Api.SendMessageAsync(ChatId, text);
+            draft = string.Empty;
+            AddOrUpdate(message);
+            await ScrollAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            sending = false;
+        }
+    }
+
+    private void OnMessageReceived(MessageDto message) =>
+        InvokeAsync(() =>
+        {
+            if (message.ChatId != ChatId)
+            {
+                return;
+            }
+
+            AddOrUpdate(message);
+            StateHasChanged();
+            _ = ScrollAsync();
+        });
+
+    private void OnMessageUpdated(MessageDto message) =>
+        InvokeAsync(() =>
+        {
+            if (message.ChatId != ChatId || messages is null)
+            {
+                return;
+            }
+
+            AddOrUpdate(message);
+            StateHasChanged();
+        });
+
+    private void OnMessageDeleted(Guid messageId) =>
+        InvokeAsync(() =>
+        {
+            var existing = messages?.FirstOrDefault(m => m.Id == messageId);
+            if (existing is null)
+            {
+                return;
+            }
+
+            existing.IsDeleted = true;
+            existing.Text = string.Empty;
+            StateHasChanged();
+        });
+
+    private void AddOrUpdate(MessageDto message)
+    {
+        messages ??= new List<MessageDto>();
+        var existing = messages.FirstOrDefault(m => m.Id == message.Id);
+        if (existing is null)
+        {
+            messages.Add(message);
+        }
+        else
+        {
+            existing.Text = message.Text;
+            existing.EditedAt = message.EditedAt;
+            existing.IsDeleted = message.IsDeleted;
+            existing.SenderDisplayName = message.SenderDisplayName;
+        }
+    }
+
+    private async Task ScrollAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("messengerScrollToEnd");
+        }
+        catch
+        {
+            // JS may not be ready on first render.
+        }
+    }
+
+    private static string FormatDate(DateTime value) =>
+        DateTime.SpecifyKind(value, DateTimeKind.Utc).ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+
+    public async ValueTask DisposeAsync()
+    {
+        if (subscribed)
+        {
+            Realtime.MessageReceived -= OnMessageReceived;
+            Realtime.MessageUpdated -= OnMessageUpdated;
+            Realtime.MessageDeleted -= OnMessageDeleted;
+        }
+
+        await Realtime.LeaveChatAsync(ChatId);
+    }
+}

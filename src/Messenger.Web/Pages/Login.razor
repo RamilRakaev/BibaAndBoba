@@ -1,0 +1,63 @@
+@page "/login"
+@layout LoginLayout
+@attribute [AllowAnonymous]
+@inject ApiAuthenticationStateProvider Auth
+@inject NavigationManager Navigation
+
+<div class="login-card">
+    <h1>Вход в Messenger</h1>
+    <p class="muted">Введите имя пользователя и пароль</p>
+
+    <EditForm Model="model" OnValidSubmit="LoginAsync">
+        <DataAnnotationsValidator />
+        <div class="form-field">
+            <label>Имя пользователя</label>
+            <InputText @bind-Value="model.UserName" autocomplete="username" />
+        </div>
+        <div class="form-field">
+            <label>Пароль</label>
+            <InputText type="password" @bind-Value="model.Password" autocomplete="current-password" />
+        </div>
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="alert alert-error">@error</div>
+        }
+        <button class="btn btn-primary btn-block" type="submit" disabled="@busy">
+            @(busy ? "Вход..." : "Войти")
+        </button>
+    </EditForm>
+</div>
+
+@code {
+    private readonly LoginModel model = new();
+    private string? error;
+    private bool busy;
+
+    private async Task LoginAsync()
+    {
+        error = null;
+        busy = true;
+        try
+        {
+            await Auth.LoginAsync(model.UserName, model.Password);
+            Navigation.NavigateTo("/chats", replace: true);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private sealed class LoginModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string UserName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Password { get; set; } = string.Empty;
+    }
+}

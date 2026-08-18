@@ -1,0 +1,79 @@
+@page "/chats"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Navigation
+
+<div class="page-card">
+    <h1>Чаты</h1>
+    <p class="muted">Личные переписки</p>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-error">@error</div>
+    }
+
+    @if (chats is null)
+    {
+        <p>Загрузка...</p>
+    }
+    else if (chats.Count == 0)
+    {
+        <p class="muted">Пока нет чатов. Откройте список пользователей и нажмите «Написать».</p>
+    }
+    else
+    {
+        <div class="chat-list">
+            @foreach (var chat in chats)
+            {
+                <button class="chat-list-item" @onclick="() => Open(chat.Id)">
+                    <div class="chat-list-title">@GetTitle(chat)</div>
+                    <div class="chat-list-preview">
+                        @if (chat.LastMessage is null || chat.LastMessage.IsDeleted)
+                        {
+                            <span class="muted">Нет сообщений</span>
+                        }
+                        else
+                        {
+                            <span>@chat.LastMessage.SenderDisplayName: @chat.LastMessage.Text</span>
+                        }
+                    </div>
+                    <div class="chat-list-date muted">@FormatDate(chat.LastMessage?.CreatedAt ?? chat.CreatedAt)</div>
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<ChatDto>? chats;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            chats = await Api.GetChatsAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private void Open(Guid id) => Navigation.NavigateTo($"/chats/{id}");
+
+    private static string GetTitle(ChatDto chat)
+    {
+        if (chat.OtherUser is not null)
+        {
+            return string.IsNullOrWhiteSpace(chat.OtherUser.DisplayName)
+                ? chat.OtherUser.UserName
+                : chat.OtherUser.DisplayName;
+        }
+
+        return string.Join(" — ", chat.Participants.Select(p => p.DisplayName));
+    }
+
+    private static string FormatDate(DateTime value) =>
+        DateTime.SpecifyKind(value, DateTimeKind.Utc).ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+}

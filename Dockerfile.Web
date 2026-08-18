@@ -1,0 +1,12 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+COPY src/Messenger.Web/Messenger.Web.csproj src/Messenger.Web/
+RUN dotnet restore src/Messenger.Web/Messenger.Web.csproj
+COPY src/Messenger.Web/ src/Messenger.Web/
+RUN dotnet publish src/Messenger.Web/Messenger.Web.csproj -c Release -o /app/publish /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+WORKDIR /app
+EXPOSE 8080
+COPY --from=build /app/publish .
+ENTRYPOINT ["dotnet", "Messenger.Web.dll"]

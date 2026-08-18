@@ -1,0 +1,88 @@
+@page "/users"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject ApiAuthenticationStateProvider Auth
+@inject NavigationManager Navigation
+
+<div class="page-card">
+    <h1>Пользователи</h1>
+    <p class="muted">Выберите пользователя, чтобы начать переписку</p>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-error">@error</div>
+    }
+
+    @if (users is null)
+    {
+        <p>Загрузка...</p>
+    }
+    else
+    {
+        <div class="user-list">
+            @foreach (var user in users)
+            {
+                <div class="user-row">
+                    <div>
+                        <div class="user-title">@user.DisplayName</div>
+                        <div class="muted">@user.UserName · @user.Role</div>
+                    </div>
+                    @if (currentUserId != user.Id)
+                    {
+                        <button class="btn btn-primary" disabled="@(startingFor == user.Id)" @onclick="() => StartChatAsync(user.Id)">
+                            Написать
+                        </button>
+                    }
+                    else
+                    {
+                        <span class="muted">это вы</span>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<UserDto>? users;
+    private string? error;
+    private Guid? currentUserId;
+    private Guid? startingFor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var state = await Auth.GetAuthenticationStateAsync();
+            if (Guid.TryParse(state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var id))
+            {
+                currentUserId = id;
+            }
+
+            users = await Api.GetUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private async Task StartChatAsync(Guid userId)
+    {
+        error = null;
+        startingFor = userId;
+        try
+        {
+            var chat = await Api.StartChatAsync(userId);
+            Navigation.NavigateTo($"/chats/{chat.Id}");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            startingFor = null;
+        }
+    }
+}
