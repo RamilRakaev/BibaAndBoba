@@ -4,8 +4,20 @@
 @inject NavigationManager Navigation
 
 <div class="page-card">
-    <h1>Чаты</h1>
-    <p class="muted">Личные переписки</p>
+    <div class="page-header">
+        <div>
+            <h1>Чаты</h1>
+            <p class="muted">Личные переписки</p>
+        </div>
+        <div class="page-actions">
+            <a class="btn btn-secondary" href="/users">Пользователи</a>
+            <AuthorizeView Roles="Admin">
+                <Authorized>
+                    <a class="btn btn-secondary" href="/admin/users">Управление</a>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+    </div>
 
     @if (!string.IsNullOrWhiteSpace(error))
     {

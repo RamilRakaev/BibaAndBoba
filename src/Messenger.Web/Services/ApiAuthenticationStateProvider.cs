@@ -6,72 +6,43 @@ namespace Messenger.Web.Services;
 
 public class ApiAuthenticationStateProvider : AuthenticationStateProvider
 {
-    private readonly ApiClient _api;
     private readonly ApiSession _session;
-    private CurrentUserDto? _currentUser;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public ApiAuthenticationStateProvider(ApiClient api, ApiSession session)
+    public ApiAuthenticationStateProvider(ApiSession session, IHttpContextAccessor httpContextAccessor)
     {
-        _api = api;
         _session = session;
+        _httpContextAccessor = httpContextAccessor;
     }
 
-    public CurrentUserDto? CurrentUser => _currentUser;
-
-    public override async Task<AuthenticationState> GetAuthenticationStateAsync()
+    public CurrentUserDto? CurrentUser
     {
-        try
+        get
         {
-            _currentUser = await _api.GetMeAsync();
+            var user = _httpContextAccessor.HttpContext?.User;
+            return user?.Identity?.IsAuthenticated == true ? MapFromPrincipal(user) : null;
         }
-        catch
-        {
-            _currentUser = null;
-        }
-
-        return new AuthenticationState(CreatePrincipal(_currentUser));
     }
 
-    public async Task<CurrentUserDto> LoginAsync(string userName, string password)
+    public override Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        _currentUser = await _api.LoginAsync(new LoginRequest
+        _session.RestoreCookies();
+
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext?.User.Identity?.IsAuthenticated == true)
         {
-            UserName = userName,
-            Password = password
-        });
-        NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(CreatePrincipal(_currentUser))));
-        return _currentUser;
+            return Task.FromResult(new AuthenticationState(httpContext.User));
+        }
+
+        return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity())));
     }
 
-    public async Task LogoutAsync()
+    private static CurrentUserDto MapFromPrincipal(ClaimsPrincipal user) => new()
     {
-        try
-        {
-            await _api.LogoutAsync();
-        }
-        finally
-        {
-            _session.Clear();
-            _currentUser = null;
-            NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(CreatePrincipal(null))));
-        }
-    }
-
-    private static ClaimsPrincipal CreatePrincipal(CurrentUserDto? user)
-    {
-        if (user is null)
-        {
-            return new ClaimsPrincipal(new ClaimsIdentity());
-        }
-
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.UserName),
-            new Claim(ClaimTypes.GivenName, user.DisplayName),
-            new Claim(ClaimTypes.Role, user.Role)
-        };
-
-        return new ClaimsPrincipal(new ClaimsIdentity(claims, "Cookies"));
-    }
+        Id = Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!),
+        UserName = user.FindFirstValue(ClaimTypes.Name) ?? string.Empty,
+        DisplayName = user.FindFirstValue(ClaimTypes.GivenName) ?? string.Empty,
+        Role = user.FindFirstValue(ClaimTypes.Role) ?? "User",
+        IsActive = true
+    };
 }

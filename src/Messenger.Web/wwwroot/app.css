@@ -102,6 +102,12 @@ a { color: var(--primary); text-decoration: none; }
     margin-bottom: 1rem;
 }
 
+.page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
 .login-shell {
     display: grid;
     place-items: center;

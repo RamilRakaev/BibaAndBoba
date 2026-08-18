@@ -1,63 +1,39 @@
 @page "/login"
 @layout LoginLayout
 @attribute [AllowAnonymous]
-@inject ApiAuthenticationStateProvider Auth
+@inject IHttpContextAccessor HttpContextAccessor
 @inject NavigationManager Navigation
 
 <div class="login-card">
     <h1>Вход в Messenger</h1>
     <p class="muted">Введите имя пользователя и пароль</p>
 
-    <EditForm Model="model" OnValidSubmit="LoginAsync">
-        <DataAnnotationsValidator />
+    <form method="post" action="/auth/login">
         <div class="form-field">
-            <label>Имя пользователя</label>
-            <InputText @bind-Value="model.UserName" autocomplete="username" />
+            <label for="userName">Имя пользователя</label>
+            <input id="userName" name="userName" autocomplete="username" required />
         </div>
         <div class="form-field">
-            <label>Пароль</label>
-            <InputText type="password" @bind-Value="model.Password" autocomplete="current-password" />
+            <label for="password">Пароль</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
         </div>
-        @if (!string.IsNullOrWhiteSpace(error))
+        @if (!string.IsNullOrWhiteSpace(Error))
         {
-            <div class="alert alert-error">@error</div>
+            <div class="alert alert-error">@Error</div>
         }
-        <button class="btn btn-primary btn-block" type="submit" disabled="@busy">
-            @(busy ? "Вход..." : "Войти")
-        </button>
-    </EditForm>
+        <button class="btn btn-primary btn-block" type="submit">Войти</button>
+    </form>
 </div>
 
 @code {
-    private readonly LoginModel model = new();
-    private string? error;
-    private bool busy;
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
 
-    private async Task LoginAsync()
+    protected override void OnInitialized()
     {
-        error = null;
-        busy = true;
-        try
+        if (HttpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated == true)
         {
-            await Auth.LoginAsync(model.UserName, model.Password);
             Navigation.NavigateTo("/chats", replace: true);
         }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-        }
-        finally
-        {
-            busy = false;
-        }
-    }
-
-    private sealed class LoginModel
-    {
-        [System.ComponentModel.DataAnnotations.Required]
-        public string UserName { get; set; } = string.Empty;
-
-        [System.ComponentModel.DataAnnotations.Required]
-        public string Password { get; set; } = string.Empty;
     }
 }

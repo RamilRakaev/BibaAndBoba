@@ -1,6 +1,4 @@
 ﻿@inherits LayoutComponentBase
-@inject ApiAuthenticationStateProvider Auth
-@inject ChatRealtimeService Realtime
 @inject NavigationManager Navigation
 
 <div class="app-shell">
@@ -19,7 +17,7 @@
             <AuthorizeView>
                 <Authorized>
                     <span class="user-name">@context.User.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value</span>
-                    <button class="btn btn-ghost" @onclick="LogoutAsync">Выйти</button>
+                    <button class="btn btn-ghost" @onclick="Logout">Выйти</button>
                 </Authorized>
             </AuthorizeView>
         </div>
@@ -36,10 +34,8 @@
 </div>
 
 @code {
-    private async Task LogoutAsync()
+    private void Logout()
     {
-        await Realtime.StopAsync();
-        await Auth.LogoutAsync();
-        Navigation.NavigateTo("/login", replace: true);
+        Navigation.NavigateTo("/auth/logout", forceLoad: true);
     }
 }
