@@ -15,16 +15,6 @@ services:
       timeout: 5s
       retries: 10
 
-  migrator:
-    build:
-      context: .
-      dockerfile: src/Messenger.Migrator/Dockerfile
-    environment:
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=messenger_db;Username=messenger_user;Password=messenger_password
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   api:
     build:
       context: .
