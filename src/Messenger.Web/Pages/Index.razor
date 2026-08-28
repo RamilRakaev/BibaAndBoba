@@ -3,8 +3,10 @@
 @inject NavigationManager Navigation
 
 @code {
-    protected override void OnInitialized()
+    protected override Task OnAfterRenderAsync(bool firstRender)
     {
-        Navigation.NavigateTo("/chats", replace: true);
+        if (firstRender)
+            Navigation.NavigateTo("/chats", replace: true);
+        return Task.CompletedTask;
     }
 }
