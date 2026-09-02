@@ -3,8 +3,11 @@
 @inject NavigationManager Navigation
 
 @code {
-    protected override void OnInitialized()
+    protected override void OnAfterRender(bool firstRender)
     {
-        Navigation.NavigateTo("/chats", replace: true);
+        if (firstRender)
+        {
+            Navigation.NavigateTo("/chats");
+        }
     }
 }
