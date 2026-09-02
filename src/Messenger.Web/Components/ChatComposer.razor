@@ -1,0 +1,32 @@
+<div class="messenger-input">
+    <div id="messenger-draft"
+         class="messenger-draft is-empty"
+         contenteditable="true"
+         role="textbox"
+         aria-multiline="false"
+         aria-label="Сообщение"
+         data-placeholder="Сообщение"
+         spellcheck="true"
+         autocapitalize="sentences"
+         enterkeyhint="send"
+         inputmode="text"></div>
+    <button id="messenger-send" class="btn btn-primary" type="button" @onclick="Send">Отправить</button>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnSend { get; set; }
+
+    private bool locked;
+
+    protected override bool ShouldRender() => !locked;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            locked = true;
+        }
+    }
+
+    private Task Send() => OnSend.InvokeAsync();
+}

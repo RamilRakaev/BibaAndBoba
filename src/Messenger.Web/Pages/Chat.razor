@@ -57,14 +57,7 @@
         <div id="messages-end"></div>
     </div>
 
-    <form class="messenger-input" @onsubmit="SendAsync" @onsubmit:preventDefault="true">
-        <input @bind="draft"
-               @bind:event="oninput"
-               maxlength="4000"
-               placeholder="Сообщение"
-               autocomplete="off" />
-        <button class="btn btn-primary" type="submit" disabled="@sending">Отправить</button>
-    </form>
+    <ChatComposer @key="ChatId" OnSend="SendAsync" />
 </div>
 
 @code {
@@ -73,7 +66,6 @@
     private List<MessageDto>? messages;
     private Guid currentUserId;
     private string? title;
-    private string draft = string.Empty;
     private string? error;
     private bool sending;
     private bool subscribed;
@@ -115,20 +107,31 @@
 
     private async Task SendAsync()
     {
-        if (string.IsNullOrWhiteSpace(draft) || sending)
+        if (sending)
         {
             return;
         }
 
         sending = true;
         error = null;
-        var text = draft.Trim();
         try
         {
+            var text = (await JS.InvokeAsync<string>("messengerReadDraft")).Trim();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            if (text.Length > 4000)
+            {
+                text = text[..4000];
+            }
+
             var message = await Api.SendMessageAsync(ChatId, text);
-            draft = string.Empty;
+            await JS.InvokeVoidAsync("messengerClearDraft");
             AddOrUpdate(message);
             await ScrollAsync();
+            await JS.InvokeVoidAsync("messengerFocusDraft");
         }
         catch (Exception ex)
         {
