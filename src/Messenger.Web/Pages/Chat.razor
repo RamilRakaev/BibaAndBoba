@@ -77,6 +77,11 @@
         await LoadAsync();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await ScrollAsync();
+    }
+
     private async Task LoadAsync()
     {
         try
@@ -97,7 +102,6 @@
             }
 
             await Realtime.JoinChatAsync(ChatId);
-            await ScrollAsync();
         }
         catch (Exception ex)
         {
